@@ -28,9 +28,11 @@ end do
 
 end subroutine initialize_ic_bc_fort
 
+!------------------------------------------------------------------
+!------------------------------------------------------------------
+!------------------------------------------------------------------
 
-
-subroutine euler_tstep_fort(omega,psi,dt,dx,dy,nx,ny,Re_N)
+subroutine euler_tstep_fort(omega,psi,nx,ny,dt,dx,dy,Re_N)
 implicit none
 
 double precision, intent(inout), dimension(0:nx-1,0:ny-1) :: omega
@@ -97,15 +99,8 @@ jj3 = 1.0 / (4.0 * dx * dy) * (omega_new(i+1, j+1) * (psi_new(i, j+1) - psi_new(
 d2wdy2 = (omega_new(i, j+1) + omega_new(i, j-1) - 2.0 * omega_new(i, j)) / (dy * dy)
 d2wdx2 = (omega_new(i+1, j) + omega_new(i-1, j) - 2.0 * omega_new(i, j)) / (dx * dx)
 
-omega_new(i, j) = omega(i, j) + dt * (-(jj1 + jj2 + jj3) + 1.0 / Re_n * (d2wdy2 + d2wdx2))
+omega(i, j) = omega(i, j) + dt * (-(jj1 + jj2 + jj3) + 1.0 / Re_n * (d2wdy2 + d2wdx2))
 
-end do
-end do
-
-
-do j = 0,ny-1
-do i = 0,nx-1
-omega(i,j) = omega_new(i,j)
 end do
 end do
 
@@ -115,45 +110,48 @@ deallocate(omega_new,psi_new)
 
 end subroutine euler_tstep_fort
 
-
-subroutine gauss_siedel_fort(psi,omega,nx,ny,dx,dy,gs_tol)
+!------------------------------------------------------------------
+!------------------------------------------------------------------
+!u-field (psi), f-source (-omega)
+!------------------------------------------------------------------
+subroutine gauss_siedel_fort(u,f,nx,ny,dx,dy,gs_tol)
 implicit none
 
 integer, intent(in) :: nx, ny
 double precision, intent(in) :: dx, dy, gs_tol
-double precision, intent(in), dimension(0:nx-1,0:ny-1) :: omega
-double precision, intent(inout), dimension(0:nx-1,0:ny-1) :: psi
+double precision, intent(in), dimension(0:nx-1,0:ny-1) :: f
+double precision, intent(inout), dimension(0:nx-1,0:ny-1) :: u
 
-double precision, dimension(:,:), allocatable :: psi_update_1, psi_update_2
+double precision, dimension(:,:), allocatable :: u_update_1, u_update_2
 integer :: not_converged, i, j, gsiter
 
-allocate(psi_update_1(-1:nx,-1:ny))
-allocate(psi_update_2(-1:nx,-1:ny))
+allocate(u_update_1(-1:nx,-1:ny))
+allocate(u_update_2(-1:nx,-1:ny))
 
 do j = 0, ny-1
 do i = 0, nx-1
 
-psi_update_1(i,j) = psi(i,j)
-psi_update_2(i,j) = psi(i,j)
+u_update_1(i,j) = u(i,j)
+u_update_2(i,j) = u(i,j)
 
 end do
 end do
 
 !BC update
 do j = 0,ny-1
-psi_update_1(-1,j) = psi_update_1(nx-1,j)
-psi_update_1(nx,j) = psi_update_1(0,j)
+u_update_1(-1,j) = u_update_1(nx-1,j)
+u_update_1(nx,j) = u_update_1(0,j)
 
-psi_update_2(-1,j) = psi_update_2(nx-1,j)
-psi_update_2(nx,j) = psi_update_2(0,j)
+u_update_2(-1,j) = u_update_2(nx-1,j)
+u_update_2(nx,j) = u_update_2(0,j)
 end do
 
 do i = -1,nx
-psi_update_1(i,-1) = psi_update_1(i,ny-1)
-psi_update_1(i,ny) = psi_update_1(i,0)
+u_update_1(i,-1) = u_update_1(i,ny-1)
+u_update_1(i,ny) = u_update_1(i,0)
 
-psi_update_2(i,-1) = psi_update_2(i,ny-1)
-psi_update_2(i,ny) = psi_update_2(i,0)
+u_update_2(i,-1) = u_update_2(i,ny-1)
+u_update_2(i,ny) = u_update_2(i,0)
 end do
 
 !GS Iterations
@@ -164,8 +162,8 @@ do while (not_converged == 1)
 do j = 0, ny - 1
 do i = 0, nx - 1
 
-psi_update_2(i, j) = -0.25*(-omega(i, j) * dx * dx - (psi_update_2(i+1, j) + psi_update_2(i-1, j) &
-			+ psi_update_2(i, j+1) + psi_update_2(i, j-1)))
+u_update_2(i, j) = -0.25*(f(i, j) * dx * dx - (u_update_2(i+1, j) + u_update_2(i-1, j) &
+			+ u_update_2(i, j+1) + u_update_2(i, j-1)))
 
 end do
 end do
@@ -175,26 +173,26 @@ gsiter = gsiter + 1
 
 !Update BC
 do j = 0,ny-1
-psi_update_2(-1,j) = psi_update_2(nx-1,j)
-psi_update_2(nx,j) = psi_update_2(0,j)
+u_update_2(-1,j) = u_update_2(nx-1,j)
+u_update_2(nx,j) = u_update_2(0,j)
 end do
 
 do i = -1,nx
-psi_update_2(i,-1) = psi_update_2(i,ny-1)
-psi_update_2(i,ny) = psi_update_2(i,0)
+u_update_2(i,-1) = u_update_2(i,ny-1)
+u_update_2(i,ny) = u_update_2(i,0)
 end do
 
-if (maxval(psi_update_2-psi_update_1) < gs_tol) then
+if (maxval(u_update_2-u_update_1) < gs_tol) then
 
 do j = 0, ny-1
 do i = 0, nx-1
-psi(i,j) = psi_update_2(i,j)
+u(i,j) = u_update_2(i,j)
 end do
 end do
 
-!print*,'Converged: ',gsiter,' Iterations of GS , Residual: ',maxval(psi_update_2-psi_update_1)
+!print*,'Converged: ',gsiter,' Iterations of GS , Residual: ',maxval(u_update_2-u_update_1)
 
-deallocate(psi_update_1,psi_update_2)
+deallocate(u_update_1,u_update_2)
 exit
 
 else
@@ -202,27 +200,13 @@ else
 
 do j = -1,ny
 do i = -1,nx
-psi_update_1(i,j) = psi_update_2(i,j)
+u_update_1(i,j) = u_update_2(i,j)
 end do
 end do
 
 end if
 
 end do
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
