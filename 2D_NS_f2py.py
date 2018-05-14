@@ -4,6 +4,7 @@ import time
 from numpy import f2py
 
 import Fortran_functions
+import Multigrid_solver
 
 #Python functions
 def euler_tstep(omega,psi):
@@ -126,8 +127,8 @@ def init_domain():
 
     global nx, ny, kappa, Re_n, lx, ly, lt, nt, dt, dx, dy, gs_tol
     global use_fortran
-    nx = 64
-    ny = 64
+    nx = 128
+    ny = 128
     kappa = 2.0
     Re_n = 1.0
     lx = 2.0 * np.pi
@@ -137,8 +138,7 @@ def init_domain():
 
     gs_tol = 1.0e-4
 
-
-    use_fortran = 0#if 0 - python functions, 1 - fortran
+    use_fortran = int(input('Enter 0 for python functions, 1 for Fortran functions: '))#if 0 - python functions, 1 - fortran
 
     lt = 0.1
     dt = 5.0e-4
@@ -206,7 +206,8 @@ def main_func():
         	#FTCS update - Fortran
             Fortran_functions.euler_tstep_fort(omega,psi,dt,dx,dy,Re_n)
             # Gauss-Siedel Prediction - Fortran
-            Fortran_functions.gauss_siedel_fort(psi, omega, dx, dy, gs_tol)
+            #Fortran_functions.gauss_siedel_fort(psi, -omega, dx, dy, gs_tol)
+            Multigrid_solver.multigrid5(psi, -omega, dx, dy,  gs_tol)
        
 
     total_clock_time = time.clock()-clock_time_init
